@@ -35,6 +35,12 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
 
+  # In App Purchase plugin for flutter. This project has been forked by
+  # react-native-iap and we are willing to share same experience with that on
+  # react-native.
+  # @license: mit
+  flutter_inapp_purchase: ^5.0.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
