@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inapp_purchase/flutter_inapp_purchase.dart';
@@ -13,35 +16,58 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'In-App Subscriptions test',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'In-App Subscriptions test'),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
+// This widget is the home page of your application.
+class MyHomePage extends StatelessWidget {
   const MyHomePage({Key? key, required this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
 
   final String title;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+      ),
+      body: const InApp(),
+    );
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class InApp extends StatefulWidget {
+  const InApp({Key? key}) : super(key: key);
+
+  @override
+  _InAppState createState() => _InAppState();
+}
+
+class _InAppState extends State<InApp> {
+  StreamSubscription? _purchaseUpdatedSubscription;
+
+  StreamSubscription? _purchaseErrorSubscription;
+
+  final List<String> _productLists = Platform.isAndroid
+      ? [
+          //
+        ]
+      : [
+          'TESTSUB001',
+          //
+        ];
+
   String _platformVersion = 'Unknown';
+
+  List<IAPItem> _items = [];
+
+  List<PurchasedItem> _purchases = [];
 
   @override
   void initState() {
@@ -51,7 +77,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
-    String? platformVersion;
+    String platformVersion;
     // Platform messages may fail, so we use a try/catch PlatformException.
     try {
       platformVersion =
@@ -70,52 +96,229 @@ class _MyHomePageState extends State<MyHomePage> {
     if (!mounted) return;
 
     setState(() {
-      _platformVersion = platformVersion!;
+      _platformVersion = platformVersion;
+    });
+
+    // refresh items for android
+    try {
+      String msg = await FlutterInappPurchase.instance.consumeAllItems;
+      print('consumeAllItems: $msg'); // ios: $msg = 'no-ops in ios'
+    } catch (err) {
+      print('consumeAllItems error: $err');
+    }
+
+    _purchaseUpdatedSubscription =
+        FlutterInappPurchase.purchaseUpdated.listen((productItem) {
+      print('purchase-updated: $productItem');
+    });
+
+    _purchaseErrorSubscription =
+        FlutterInappPurchase.purchaseError.listen((purchaseError) {
+      print('purchase-error: $purchaseError');
+    });
+  }
+
+  void _requestPurchase(IAPItem item) {
+    assert(item.productId != null, "productId can't be null");
+    FlutterInappPurchase.instance.requestPurchase(item.productId!);
+  }
+
+  Future _getProduct() async {
+    final items =
+        await FlutterInappPurchase.instance.getProducts(_productLists);
+    for (IAPItem item in items) {
+      print(item.toString());
+      _items.add(item);
+    }
+    setState(() {
+      _items = items;
+      _purchases = [];
+    });
+  }
+
+  Future _getPurchases() async {
+    final items =
+        await FlutterInappPurchase.instance.getAvailablePurchases() ?? [];
+    for (PurchasedItem item in items) {
+      print(item.toString());
+      _purchases.add(item);
+    }
+    setState(() {
+      _items = [];
+      _purchases = items;
+    });
+  }
+
+  Future _getPurchaseHistory() async {
+    final items =
+        await FlutterInappPurchase.instance.getPurchaseHistory() ?? [];
+    for (PurchasedItem item in items) {
+      print(item.toString());
+      _purchases.add(item);
+    }
+    setState(() {
+      _items = [];
+      _purchases = items;
     });
   }
 
   @override
   void dispose() async {
     super.dispose();
+    _purchaseUpdatedSubscription?.cancel();
+    _purchaseUpdatedSubscription = null;
+    _purchaseErrorSubscription?.cancel();
+    _purchaseErrorSubscription = null;
     await FlutterInappPurchase.instance.endConnection;
+  }
+
+  List<Widget> _renderInApps() {
+    return _items.map(_renderItem).toList();
+  }
+
+  Widget _renderItem(IAPItem item) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Column(
+        children: <Widget>[
+          Container(
+            margin: const EdgeInsets.only(bottom: 5.0),
+            child: Text(
+              item.toString(),
+              style: const TextStyle(fontSize: 18.0, color: Colors.black),
+            ),
+          ),
+          MaterialButton(
+            color: Colors.orange,
+            onPressed: () {
+              print("---------- Buy Item Button Pressed");
+              _requestPurchase(item);
+            },
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Container(
+                    height: 48.0,
+                    alignment: Alignment.centerLeft,
+                    child: const Text('Buy Item'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _renderPurchases() {
+    return _purchases.map(_renderPurchase).toList();
+  }
+
+  Widget _renderPurchase(PurchasedItem item) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Column(
+        children: <Widget>[
+          Container(
+            margin: const EdgeInsets.only(bottom: 5.0),
+            child: Text(
+              item.toString(),
+              style: const TextStyle(fontSize: 18.0, color: Colors.black),
+            ),
+          )
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+    return Container(
+      padding: const EdgeInsets.all(10.0),
+      child: ListView(
+        children: <Widget>[
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: <Widget>[
+              Text('Running on: $_platformVersion\n'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Expanded(
+                    flex: 1,
+                    child: Btn(
+                      text: const Text('Get Items'),
+                      height: 60,
+                      onPressed: () {
+                        print("---------- Get Items Button Pressed");
+                        _getProduct();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 1,
+                    child: Btn(
+                      text: const Text('Get Purchases'),
+                      height: 60,
+                      onPressed: () {
+                        print("---------- Get Purchases Button Pressed");
+                        _getPurchases();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 1,
+                    child: Btn(
+                      text: const Text('Get Purchase History'),
+                      height: 60,
+                      onPressed: () {
+                        print("---------- Get Purchase History Button Pressed");
+                        _getPurchaseHistory();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              Column(children: _renderInApps()),
+              Column(children: _renderPurchases()),
+            ],
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text('Running on: $_platformVersion'),
-          ],
-        ),
+    );
+  }
+}
+
+class Btn extends StatelessWidget {
+  const Btn({
+    Key? key,
+    required this.text,
+    this.height,
+    this.onPressed,
+  }) : super(key: key);
+
+  final Widget text;
+
+  final double? height;
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialButton(
+      height: height,
+      color: Theme.of(context).primaryColor,
+      textColor: Theme.of(context).primaryTextTheme.button?.color,
+      padding: const EdgeInsets.all(0.0),
+      onPressed: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10.0),
+        alignment: Alignment.center,
+        child: text,
       ),
     );
   }
