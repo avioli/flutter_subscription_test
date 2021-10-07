@@ -54,7 +54,7 @@ class _InAppState extends State<InApp> {
 
   StreamSubscription? _purchaseErrorSubscription;
 
-  final List<String> _productLists = Platform.isAndroid
+  final List<String> _subsList = Platform.isAndroid
       ? [
           //
         ]
@@ -88,7 +88,7 @@ class _InAppState extends State<InApp> {
 
     // Init the connection
     final result = await FlutterInappPurchase.instance.initConnection;
-    print('init result: $result');
+    print('init result: $result'); // ios: $result = 'true'
 
     // If the widget was removed from the tree while the asynchronous platform
     // message was in flight, we want to discard the reply rather than calling
@@ -123,9 +123,11 @@ class _InAppState extends State<InApp> {
     FlutterInappPurchase.instance.requestPurchase(item.productId!);
   }
 
-  Future _getProduct() async {
+  Future _getSubscriptions() async {
+    print('subs to list: $_subsList');
     final items =
-        await FlutterInappPurchase.instance.getProducts(_productLists);
+        await FlutterInappPurchase.instance.getSubscriptions(_subsList);
+    print('subscriptions: $items');
     for (IAPItem item in items) {
       print(item.toString());
       _items.add(item);
@@ -249,11 +251,11 @@ class _InAppState extends State<InApp> {
                   Expanded(
                     flex: 1,
                     child: Btn(
-                      text: const Text('Get Items'),
+                      text: const Text('Get Subscriptions'),
                       height: 60,
                       onPressed: () {
-                        print("---------- Get Items Button Pressed");
-                        _getProduct();
+                        print("---------- Get Subscriptions Button Pressed");
+                        _getSubscriptions();
                       },
                     ),
                   ),
